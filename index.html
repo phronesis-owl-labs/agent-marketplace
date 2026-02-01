@@ -432,15 +432,11 @@
     async function loadAgents() {
       const grid = document.getElementById('agents-grid');
       try {
-        console.log('1. Starting loadAgents...');
-        console.log('2. Contract address:', CONTRACTS.registry);
-        
         const count = await client.readContract({ 
           address: CONTRACTS.registry, 
           abi: REGISTRY_ABI, 
           functionName: 'getAgentCount' 
         });
-        console.log('3. Agent count:', count);
         
         if (count === 0n) { 
           grid.innerHTML = '<p class="text-gray-500">No agents registered yet. Be the first!</p>'; 
@@ -448,16 +444,14 @@
         }
         
         allAgents = [];
-        for (let i = 0; i < Math.min(Number(count), 20); i++) {
+        for (let i = 0; i < Math.min(Number(count), 50); i++) {
           try {
-            console.log('4. Fetching agent index:', i);
             const addr = await client.readContract({ 
               address: CONTRACTS.registry, 
               abi: REGISTRY_ABI, 
               functionName: 'agentList', 
               args: [BigInt(i)] 
             });
-            console.log('5. Got address:', addr);
             
             const agent = await client.readContract({ 
               address: CONTRACTS.registry, 
@@ -465,7 +459,6 @@
               functionName: 'agents', 
               args: [addr] 
             });
-            console.log('6. Got agent data:', agent);
             
             if (agent[6]) {
               let tags = [];
@@ -476,15 +469,12 @@
                 registeredAt: agent[7].toString(), tags
               });
             }
-          } catch(innerErr) { 
-            console.error('Error loading agent', i, innerErr.message, innerErr); 
-          }
+          } catch(e) { console.error('Error loading agent', i, e); }
         }
-        console.log('7. All agents loaded:', allAgents);
         renderAgents(allAgents);
       } catch(e) { 
-        console.error('Error in loadAgents:', e.message, e); 
-        grid.innerHTML = `<p class="text-red-400">Error: ${e.message}</p>`;
+        console.error('Error loading agents:', e); 
+        grid.innerHTML = '<p class="text-red-400">Error loading agents.</p>';
       }
     }
 
