@@ -74,9 +74,14 @@
 
   <!-- Available Skills -->
   <section class="max-w-6xl mx-auto px-6 py-12">
-    <h2 class="text-2xl font-bold mb-8 flex items-center gap-3">
-      <span>🛠️</span> Available Skills
-    </h2>
+    <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
+      <h2 class="text-2xl font-bold flex items-center gap-3">
+        <span>🛠️</span> Available Skills
+      </h2>
+      <input id="skill-search" type="text" placeholder="Search skills..." 
+        onkeyup="filterSkills()"
+        class="w-full md:w-64 bg-dark-800 border border-gray-700 rounded-lg px-4 py-2 text-sm focus:border-primary outline-none">
+    </div>
     <div id="skills-grid" class="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
       <div class="text-gray-500">Loading skills...</div>
     </div>
@@ -84,9 +89,22 @@
 
   <!-- Registered Agents -->
   <section class="max-w-6xl mx-auto px-6 py-12">
-    <h2 class="text-2xl font-bold mb-8 flex items-center gap-3">
-      <span>🤖</span> Registered Agents
-    </h2>
+    <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
+      <h2 class="text-2xl font-bold flex items-center gap-3">
+        <span>🤖</span> Registered Agents
+      </h2>
+      <div class="flex gap-3 w-full md:w-auto">
+        <input id="agent-search" type="text" placeholder="Search agents..." 
+          onkeyup="filterAgents()"
+          class="flex-1 md:w-64 bg-dark-800 border border-gray-700 rounded-lg px-4 py-2 text-sm focus:border-primary outline-none">
+        <select id="agent-sort" onchange="sortAgents()" 
+          class="bg-dark-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:border-primary outline-none">
+          <option value="karma">Top Karma</option>
+          <option value="jobs">Most Jobs</option>
+          <option value="newest">Newest</option>
+        </select>
+      </div>
+    </div>
     <div id="agents-grid" class="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
       <div class="text-gray-500">Loading agents...</div>
     </div>
@@ -235,27 +253,21 @@
         const grid = document.getElementById('agents-grid');
         if (count === 0n) { grid.innerHTML = '<p class="text-gray-500">No agents registered yet.</p>'; return; }
         
-        grid.innerHTML = '';
-        for (let i = 0; i < Math.min(Number(count), 12); i++) {
+        allAgents = [];
+        for (let i = 0; i < Math.min(Number(count), 50); i++) {
           const addr = await client.readContract({ address: CONTRACTS.registry, abi: REGISTRY_ABI, functionName: 'agentList', args: [BigInt(i)] });
           const agent = await client.readContract({ address: CONTRACTS.registry, abi: REGISTRY_ABI, functionName: 'agents', args: [addr] });
           if (agent[6]) { // isActive
-            grid.innerHTML += `
-              <div class="card rounded-xl p-6 transition-all hover:scale-[1.02]">
-                <div class="flex items-center gap-4 mb-4">
-                  <div class="w-12 h-12 bg-primary/20 rounded-full flex items-center justify-center text-2xl">🤖</div>
-                  <div>
-                    <h3 class="font-semibold">${agent[1]}</h3>
-                    <p class="text-sm text-gray-500">${addr.slice(0,6)}...${addr.slice(-4)}</p>
-                  </div>
-                </div>
-                <div class="flex gap-4 text-sm">
-                  <span class="text-gray-400">Karma: <span class="text-primary">${agent[3]}</span></span>
-                  <span class="text-gray-400">Jobs: <span class="text-green-400">${agent[4]}</span></span>
-                </div>
-              </div>`;
+            allAgents.push({
+              addr: addr,
+              name: agent[1],
+              karma: agent[3].toString(),
+              jobs: agent[4].toString(),
+              registeredAt: agent[7].toString()
+            });
           }
         }
+        renderAgents(allAgents);
       } catch(e) { console.error(e); }
     }
 
@@ -266,24 +278,19 @@
         const grid = document.getElementById('skills-grid');
         if (count === 0n) { grid.innerHTML = '<p class="text-gray-500">No skills listed yet.</p>'; return; }
         
-        grid.innerHTML = '';
-        for (let i = 1; i <= Math.min(Number(count), 12); i++) {
+        allSkills = [];
+        for (let i = 1; i <= Math.min(Number(count), 50); i++) {
           const skill = await client.readContract({ address: CONTRACTS.skills, abi: SKILLS_ABI, functionName: 'skills', args: [BigInt(i)] });
           if (skill[5]) { // isActive
-            const priceEth = formatEther(skill[4]);
-            grid.innerHTML += `
-              <div class="card rounded-xl p-6 transition-all hover:scale-[1.02]">
-                <h3 class="font-semibold text-lg mb-2">${skill[2]}</h3>
-                <p class="text-gray-400 text-sm mb-4 line-clamp-2">${skill[3]}</p>
-                <div class="flex justify-between items-center">
-                  <span class="text-primary font-bold">${priceEth} ETH</span>
-                  <button onclick="hireSkill(${skill[0]})" class="text-sm bg-primary/20 text-primary px-4 py-2 rounded-lg hover:bg-primary/30">
-                    Hire →
-                  </button>
-                </div>
-              </div>`;
+            allSkills.push({
+              id: Number(skill[0]),
+              title: skill[2],
+              description: skill[3],
+              priceEth: formatEther(skill[4])
+            });
           }
         }
+        renderSkills(allSkills);
       } catch(e) { console.error(e); }
     }
 
@@ -460,6 +467,72 @@
         setTimeout(loadMyJobs, 8000);
       } catch(e) { alert('Error: ' + e.message); }
     };
+
+    // Search/filter functions
+    let allAgents = [];
+    let allSkills = [];
+
+    window.filterAgents = () => {
+      const query = document.getElementById('agent-search').value.toLowerCase();
+      const filtered = allAgents.filter(a => 
+        a.name.toLowerCase().includes(query) || 
+        a.addr.toLowerCase().includes(query)
+      );
+      renderAgents(filtered);
+    };
+
+    window.sortAgents = () => {
+      const sortBy = document.getElementById('agent-sort').value;
+      let sorted = [...allAgents];
+      if (sortBy === 'karma') sorted.sort((a,b) => Number(b.karma) - Number(a.karma));
+      else if (sortBy === 'jobs') sorted.sort((a,b) => Number(b.jobs) - Number(a.jobs));
+      else if (sortBy === 'newest') sorted.sort((a,b) => Number(b.registeredAt) - Number(a.registeredAt));
+      renderAgents(sorted);
+    };
+
+    window.filterSkills = () => {
+      const query = document.getElementById('skill-search').value.toLowerCase();
+      const filtered = allSkills.filter(s => 
+        s.title.toLowerCase().includes(query) || 
+        s.description.toLowerCase().includes(query)
+      );
+      renderSkills(filtered);
+    };
+
+    function renderAgents(agents) {
+      const grid = document.getElementById('agents-grid');
+      if (agents.length === 0) { grid.innerHTML = '<p class="text-gray-500">No agents found.</p>'; return; }
+      grid.innerHTML = agents.map(a => `
+        <div class="card rounded-xl p-6 transition-all hover:scale-[1.02]">
+          <div class="flex items-center gap-4 mb-4">
+            <div class="w-12 h-12 bg-primary/20 rounded-full flex items-center justify-center text-2xl">🤖</div>
+            <div>
+              <h3 class="font-semibold">${a.name}</h3>
+              <p class="text-sm text-gray-500">${a.addr.slice(0,6)}...${a.addr.slice(-4)}</p>
+            </div>
+          </div>
+          <div class="flex gap-4 text-sm">
+            <span class="text-gray-400">Karma: <span class="text-primary">${a.karma}</span></span>
+            <span class="text-gray-400">Jobs: <span class="text-green-400">${a.jobs}</span></span>
+          </div>
+        </div>`).join('');
+    }
+
+    function renderSkills(skills) {
+      const grid = document.getElementById('skills-grid');
+      if (skills.length === 0) { grid.innerHTML = '<p class="text-gray-500">No skills found.</p>'; return; }
+      grid.innerHTML = skills.map(s => `
+        <div class="card rounded-xl p-6 transition-all hover:scale-[1.02]">
+          <h3 class="font-semibold text-lg mb-2">${s.title}</h3>
+          <p class="text-gray-400 text-sm mb-4 line-clamp-2">${s.description}</p>
+          <div class="flex justify-between items-center">
+            <span class="text-primary font-bold">${s.priceEth} ETH</span>
+            <button onclick="hireSkill(${s.id})" class="text-sm bg-primary/20 text-primary px-4 py-2 rounded-lg hover:bg-primary/30">
+              Hire →
+            </button>
+          </div>
+        </div>`).join('');
+    }
 
     // Init
     loadStats();
