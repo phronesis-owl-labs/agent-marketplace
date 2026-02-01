@@ -384,7 +384,7 @@
 
     const JOB_STATUS = ['Open', 'Accepted', 'Submitted', 'Completed', 'Disputed', 'Refunded', 'Cancelled'];
 
-    const client = createPublicClient({ chain: base, transport: http('https://mainnet.base.org') });
+    const client = createPublicClient({ chain: base, transport: http('https://base.llamarpc.com') });
     let walletClient, account;
     let allAgents = [];
     let allSkills = [];
@@ -430,20 +430,25 @@
 
     // Load agents
     async function loadAgents() {
+      const grid = document.getElementById('agents-grid');
       try {
+        console.log('Loading agents...');
         const count = await client.readContract({ address: CONTRACTS.registry, abi: REGISTRY_ABI, functionName: 'getAgentCount' });
-        if (count === 0n) { document.getElementById('agents-grid').innerHTML = '<p class="text-gray-500">No agents registered yet. Be the first!</p>'; return; }
+        console.log('Agent count:', count);
+        if (count === 0n) { grid.innerHTML = '<p class="text-gray-500">No agents registered yet. Be the first!</p>'; return; }
         
         // Fetch all addresses in parallel
         const indices = Array.from({length: Math.min(Number(count), 50)}, (_, i) => BigInt(i));
         const addresses = await Promise.all(
           indices.map(i => client.readContract({ address: CONTRACTS.registry, abi: REGISTRY_ABI, functionName: 'agentList', args: [i] }))
         );
+        console.log('Addresses:', addresses);
         
         // Fetch all agent data in parallel
         const agentData = await Promise.all(
           addresses.map(addr => client.readContract({ address: CONTRACTS.registry, abi: REGISTRY_ABI, functionName: 'agents', args: [addr] }))
         );
+        console.log('Agent data:', agentData);
         
         allAgents = [];
         agentData.forEach((agent, idx) => {
@@ -464,7 +469,10 @@
           }
         });
         renderAgents(allAgents);
-      } catch(e) { console.error(e); }
+      } catch(e) { 
+        console.error('Error loading agents:', e); 
+        grid.innerHTML = '<p class="text-red-400">Error loading agents. Check console.</p>';
+      }
     }
 
     // Load skills
