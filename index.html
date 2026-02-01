@@ -432,17 +432,41 @@
     async function loadAgents() {
       const grid = document.getElementById('agents-grid');
       try {
-        console.log('Loading agents...');
-        const count = await client.readContract({ address: CONTRACTS.registry, abi: REGISTRY_ABI, functionName: 'getAgentCount' });
-        console.log('Agent count:', count);
-        if (count === 0n) { grid.innerHTML = '<p class="text-gray-500">No agents registered yet. Be the first!</p>'; return; }
+        console.log('1. Starting loadAgents...');
+        console.log('2. Contract address:', CONTRACTS.registry);
+        
+        const count = await client.readContract({ 
+          address: CONTRACTS.registry, 
+          abi: REGISTRY_ABI, 
+          functionName: 'getAgentCount' 
+        });
+        console.log('3. Agent count:', count);
+        
+        if (count === 0n) { 
+          grid.innerHTML = '<p class="text-gray-500">No agents registered yet. Be the first!</p>'; 
+          return; 
+        }
         
         allAgents = [];
-        // Fetch sequentially to avoid rate limits
         for (let i = 0; i < Math.min(Number(count), 20); i++) {
           try {
-            const addr = await client.readContract({ address: CONTRACTS.registry, abi: REGISTRY_ABI, functionName: 'agentList', args: [BigInt(i)] });
-            const agent = await client.readContract({ address: CONTRACTS.registry, abi: REGISTRY_ABI, functionName: 'agents', args: [addr] });
+            console.log('4. Fetching agent index:', i);
+            const addr = await client.readContract({ 
+              address: CONTRACTS.registry, 
+              abi: REGISTRY_ABI, 
+              functionName: 'agentList', 
+              args: [BigInt(i)] 
+            });
+            console.log('5. Got address:', addr);
+            
+            const agent = await client.readContract({ 
+              address: CONTRACTS.registry, 
+              abi: REGISTRY_ABI, 
+              functionName: 'agents', 
+              args: [addr] 
+            });
+            console.log('6. Got agent data:', agent);
+            
             if (agent[6]) {
               let tags = [];
               try { if (agent[2]) { tags = JSON.parse(agent[2]).tags || []; } } catch(e) {}
@@ -452,13 +476,15 @@
                 registeredAt: agent[7].toString(), tags
               });
             }
-          } catch(e) { console.error('Error loading agent', i, e); }
+          } catch(innerErr) { 
+            console.error('Error loading agent', i, innerErr.message, innerErr); 
+          }
         }
-        console.log('Loaded agents:', allAgents);
+        console.log('7. All agents loaded:', allAgents);
         renderAgents(allAgents);
       } catch(e) { 
-        console.error('Error loading agents:', e); 
-        grid.innerHTML = '<p class="text-red-400">Error loading agents. Check console.</p>';
+        console.error('Error in loadAgents:', e.message, e); 
+        grid.innerHTML = `<p class="text-red-400">Error: ${e.message}</p>`;
       }
     }
 
